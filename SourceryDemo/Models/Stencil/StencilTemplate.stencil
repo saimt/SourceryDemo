@@ -1,0 +1,187 @@
+
+import Foundation
+
+{% for type in types.implementing.DemoProtocol %}
+{# Iterate over all structs that implement DemoProtocol #}
+
+public class Demo{{type.name}}: NSObject, NSCoding {
+{# Iterate over all variables that are not annotated as "ignore" #}
+{% for variable in type.variables|!annotated:"ignore" %}
+{% if variable.type.implements.DemoProtocol or variable.typeName.array.elementType.implements.DemoProtocol %}
+{# The variable implements DemoProtocol or the variable is an array with elements that implement DemoProtocol #}
+{% if variable.type.implements.DemoProtocol %}
+{# The variable implements DemoProtocol #}
+public var {{variable.name}}: Demo{{variable.unwrappedTypeName}}?
+{% endif %}
+{% if variable.typeName.array.elementType.implements.DemoProtocol %}
+public var {{variable.name}}: [Demo{{variable.typeName.array.elementTypeName}}]!
+{% endif %}
+{% else %}
+public var {{variable.name}}: {{variable.unwrappedTypeName}}?
+{% endif %}
+{% endfor %}
+
+/**
+* Instantiate the instance using the passed dictionary values to set the properties values
+*/
+init(fromDictionary dictionary: [String: Any]) {
+{% for variable in type.variables|!annotated:"ignore" %}
+{# Iterate over all variables that are not annotated as "ignore" #}
+{% if variable.type.implements.DemoProtocol or variable.typeName.array.elementType.implements.DemoProtocol %}
+{# The variable implements DemoProtocol or the variable is an array with elements that implement DemoProtocol #}
+{% if variable.type.implements.DemoProtocol %}
+{# The variable implements DemoProtocol #}
+{% if variable|annotated:"jsonKey" %}
+    if let {{variable.name}}Json = dictionary["{{variable.annotations.jsonKey}}"] as? [String: Any] {
+{% else %}
+    if let {{variable.name}}Json = dictionary["{{variable.name}}"] as? [String: Any] {
+{% endif %}
+        self.{{variable.name}} = Demo{{variable.unwrappedTypeName}}(fromDictionary: {{variable.name}}Json)
+    } else {
+        self.{{variable.name}} = nil
+    }
+{% endif %}
+{# The variable is an array with elements that implement DemoProtocol #}
+{% if variable.typeName.array.elementType.implements.DemoProtocol %}
+    self.{{variable.name}} = [Demo{{variable.typeName.array.elementTypeName}}]()
+{% if variable|annotated:"jsonKey" %}
+    if let {{variable.name}}Array = dictionary["{{variable.annotations.jsonKey}}"] as? [[String: Any]] {
+{% else %}
+    if let {{variable.name}}Array = dictionary["{{variable.name}}"] as? [[String: Any]] {
+{% endif %}
+        for dict in {{variable.name}}Array {
+            let value = Demo{{variable.typeName.array.elementTypeName}}(fromDictionary: dict)
+            self.{{variable.name}}.append(value)
+        }
+    }
+{% endif %}
+
+{% else %}
+{% if variable.typeName|contains:"Date" or variable.typeName|contains:"BigInt" %}
+{% if variable.typeName|contains:"Date" %}
+{% if variable|annotated:"jsonKey" %}
+if let tempDate = dictionary["{{variable.annotations.jsonKey}}"] as? Int {
+let date = Date(timeIntervalSince1970: Double(tempDate))
+let dateFormatter = DateFormatter()
+dateFormatter.timeZone = TimeZone(abbreviation: "GMT") //Set timezone that you want
+dateFormatter.locale = Locale(identifier: "en_US")
+dateFormatter.dateFormat = "MM/dd/yy HH:mm"
+let strDate = dateFormatter.string(from: date)
+self.{{variable.name}} = dateFormatter.date(from: strDate)
+}
+{% else %}
+if let tempDate = dictionary["{{variable.name}}"] as? Int {
+let date = Date(timeIntervalSince1970: Double(tempDate))
+let dateFormatter = DateFormatter()
+dateFormatter.timeZone = TimeZone(abbreviation: "GMT") //Set timezone that you want
+dateFormatter.locale = Locale(identifier: "en_US")
+dateFormatter.dateFormat = "MM/dd/yy HH:mm"
+let strDate = dateFormatter.string(from: date)
+self.{{variable.name}} = dateFormatter.date(from: strDate)
+}
+{% endif %}
+{% endif %}
+{% if variable.typeName|contains:"BigInt" %}
+{% if variable|annotated:"jsonKey" %}
+    if let data = dictionary["{{variable.annotations.jsonKey}}"] as? String {
+{% else %}
+    if let data = dictionary["{{variable.name}}"] as? String {
+{% endif %}
+        self.{{variable.name}} = BigInt(data, radix: 10)
+    }
+{% endif %}
+{% else %}
+{% if variable|annotated:"jsonKey" %}
+    self.{{variable.name}} = dictionary["{{variable.annotations.jsonKey}}"] as? {{variable.typeName}}
+{% else %}
+    self.{{variable.name}} = dictionary["{{variable.name}}"] as? {{variable.typeName}}
+{% endif %}
+{% endif %}
+{% endif %}
+{% endfor %}
+}
+
+/**
+* Returns all the available property values in the form of [String:Any] object where the key is the approperiate json key and the value is the value of the corresponding property
+*/
+func toDictionary() -> [String:Any] {
+    var dictionary = [String:Any]()
+
+{% for variable in type.variables|!annotated:"ignore" %}
+{# Iterate over all variables that are not annotated as "ignore" #}
+{% if variable.type.implements.DemoProtocol or variable.typeName.array.elementType.implements.DemoProtocol %}
+{# The variable implements DemoProtocol or the variable is an array with elements that implement DemoProtocol #}
+{% if variable.type.implements.DemoProtocol %}
+{# The variable implements DemoProtocol #}
+    if let dict = self.{{variable.name}}?.toDictionary() {
+{% if variable|annotated:"jsonKey" %}
+        dictionary["{{variable.annotations.jsonKey}}"] = dict
+{% else %}
+        dictionary["{{variable.name}}"] = dict
+{% endif %}
+    }
+{% endif %}
+{% if variable.typeName.array.elementType.implements.DemoProtocol %}
+{# The variable is an array with elements that implement DemoProtocol #}
+    if {{variable.name}} != nil {
+        var dictionaryElements = [[String:Any]]()
+        for element in {{variable.name}} {
+            dictionaryElements.append(element.toDictionary())
+        }
+{% if variable|annotated:"jsonKey" %}
+        dictionary["{{variable.annotations.jsonKey}}"] = dictionaryElements
+{% else %}
+        dictionary["{{variable.name}}"] = dictionaryElements
+{% endif %}
+    }
+{% endif %}
+{% else %}
+{% if variable|annotated:"jsonKey" %}
+    dictionary["{{variable.annotations.jsonKey}}"] = {{variable.name}}
+{% else %}
+    dictionary["{{variable.name}}"] = {{variable.name}}
+{% endif %}
+{% endif %}
+{% endfor %}
+
+    return dictionary
+}
+
+/**
+* NSCoding required method.
+* Encodes mode properties into the decoder
+*/
+@objc public func encode(with aCoder: NSCoder) {
+{% for variable in type.variables|!annotated:"ignore" %}
+{# Iterate over all variables that are not annotated as "ignore" #}
+    if self.{{variable.name}} != nil {
+        aCoder.encode({{variable.name}}, forKey:"{{variable.name}}")
+    }
+{% endfor %}
+}
+
+/**
+* NSCoding required initializer.
+* Fills the data from the passed decoder
+*/
+required public init(coder aDecoder: NSCoder) {
+{% for variable in type.variables|!annotated:"ignore" %}
+{# Iterate over all variables that are not annotated as "ignore" #}
+{% if variable.type.implements.DemoProtocol or variable.typeName.array.elementType.implements.DemoProtocol %}
+{# The variable implements DemoProtocol or the variable is an array with elements that implement DemoProtocol #}
+{% if variable.type.implements.DemoProtocol %}
+{# The variable implements DemoProtocol #}
+    self.{{variable.name}} = aDecoder.decodeObject(forKey: "{{variable.name}}") as? Demo{{variable.typeName}}
+{% endif %}
+{% if variable.typeName.array.elementType.implements.DemoProtocol %}
+{# The variable is an array with elements that implement DemoProtocol #}
+    self.{{variable.name}} = aDecoder.decodeObject(forKey: "{{variable.name}}") as? [Demo{{variable.typeName.array.elementTypeName}}] ?? []
+{% endif %}
+{% else %}
+    self.{{variable.name}} = aDecoder.decodeObject(forKey: "{{variable.name}}") as? {{variable.typeName}}
+{% endif %}
+{% endfor %}
+}
+
+}
+{% endfor %}
